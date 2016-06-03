@@ -1,32 +1,54 @@
 package com.locusintellect;
 
+import com.locusintellect.offers.Offer;
+import com.locusintellect.offers.OfferCalculator;
+import com.locusintellect.providers.ItemPriceProvider;
+
 import java.math.BigDecimal;
-import java.util.HashMap;
-import java.util.Map;
 
 public class CheckoutSystem {
 
-    private static final Map<String, BigDecimal> itemsToCostInPenceMap = new HashMap<>();
+    private final ItemPriceProvider itemPriceProvider;
+    private final OfferCalculator offerCalculator;
 
-    static {
-        itemsToCostInPenceMap.put("Apple", new BigDecimal(60));
-        itemsToCostInPenceMap.put("Orange", new BigDecimal(25));
+    public CheckoutSystem(final ItemPriceProvider itemPriceProvider, final OfferCalculator offerCalculator) {
+        this.itemPriceProvider = itemPriceProvider;
+        this.offerCalculator = offerCalculator;
     }
 
-
-
-    public String checkout(final String[] items) {
-        BigDecimal finalAmount = new BigDecimal(0);
-
+    public String checkout(final String[] items, final Offer[] offers) {
         if (items == null || items.length == 0) {
             return "£0";
         }
 
-        for (String item : items) {
-            finalAmount = finalAmount.add(itemsToCostInPenceMap.get(item));
-        }
+        BigDecimal amountWithoutOffer = calculateTotalPriceOfItems(items);
 
-        return "£" + convertPenceToPounds(finalAmount).toPlainString();
+        BigDecimal offerPrice = getOfferPriceOnItems(items, offers);
+
+        return "£" + convertPenceToPounds(amountWithoutOffer.add(offerPrice)).toPlainString();
+    }
+
+    private BigDecimal getOfferPriceOnItems(final String[] items, Offer[] offers) {
+        final BigDecimal[] offerPrices = offerCalculator.calculate(items, offers);
+        BigDecimal finalOfferPrice = new BigDecimal(0);
+
+        for (BigDecimal offerPrice : offerPrices) {
+            finalOfferPrice = finalOfferPrice.add(offerPrice);
+        }
+        return finalOfferPrice;
+    }
+
+    private BigDecimal calculateTotalPriceOfItems(final String[] items) {
+        BigDecimal finalAmount = new BigDecimal(0);
+
+        for (String item : items) {
+            if (itemPriceProvider.provideCostInPence(item) != null) {
+                finalAmount = finalAmount.add(itemPriceProvider.provideCostInPence(item));
+            } else {
+                throw new MissingPriceException(String.format("Price missing for item %s", item));
+            }
+        }
+        return finalAmount;
     }
 
     private BigDecimal convertPenceToPounds(final BigDecimal amountInPence) {
